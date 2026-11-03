@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rozliczenia ze znajomymi</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <header class="bg-indigo-600 text-white shadow-md py-4 px-6 flex justify-between items-center">
+        <h1 class="text-xl font-bold tracking-wide cursor-pointer" onclick="goHome()">💰 KtoKomu PWA</h1>
+        <button onclick="resetApp()" class="text-xs bg-indigo-700 hover:bg-indigo-800 px-3 py-1 rounded transition">Reset danych</button>
+    </header>
+
+    <main class="flex-grow max-w-md w-full mx-auto p-4 space-y-6">
+
+        <!-- WIDOK 1: LISTA ARKUSZY (EKRAN STARTOWY) -->
+        <section id="sheets-list-section" class="space-y-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-slate-700">Twoje arkusze</h2>
+                <button onclick="showCreateSheetModal()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3 py-2 rounded-xl transition shadow-sm">+ Nowy arkusz</button>
+            </div>
+            <div id="sheets-container" class="space-y-3"></div>
+        </section>
+
+        <!-- MODAL TWORZENIA ARKUSZA -->
+        <section id="create-sheet-section" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4 hidden">
+            <div class="flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-slate-700">Nowy Arkusz / Grupa</h2>
+                <button onclick="goHome()" class="text-xs text-slate-400 hover:text-slate-600">Anuluj</button>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-600 mb-1">Nazwa arkusza:</label>
+                <input type="text" id="sheet-name" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="np. Majówka">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-600 mb-1">Uczestnicy (po przecinku):</label>
+                <input type="text" id="sheet-members" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Kuba, Ania, Tomek">
+            </div>
+            <button onclick="createSheet()" class="w-full bg-indigo-600 text-white font-medium py-2.5 rounded-xl hover:bg-indigo-700 transition">Utwórz i otwórz</button>
+        </section>
+
+        <!-- WIDOK 2: GŁÓWNY PANEL ARKUSZA -->
+        <div id="main-panel" class="space-y-6 hidden">
+            
+            <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex justify-between items-center">
+                <div>
+                    <button onclick="goHome()" class="text-xs text-indigo-600 hover:underline font-medium mb-1 block">← Wróć do listy arkuszy</button>
+                    <h3 id="display-sheet-name" class="font-bold text-indigo-900 text-lg"></h3>
+                    <p id="display-members" class="text-xs text-indigo-600"></p>
+                </div>
+                <div class="flex flex-col items-end space-y-1">
+                    <button onclick="openMembersModal()" class="text-xs bg-indigo-600 text-white font-medium px-2.5 py-1 rounded shadow-sm hover:bg-indigo-700 transition">Edytuj skład</button>
+                    <button onclick="deleteCurrentSheet()" class="text-xs text-rose-500 hover:text-rose-700 font-medium bg-white px-2 py-0.5 rounded border border-rose-100">Usuń arkusz</button>
+                </div>
+            </div>
+
+            <!-- MODAL EDYCJI SKŁADU -->
+            <section id="members-modal-section" class="bg-white p-5 rounded-2xl shadow-sm border border-indigo-200 space-y-4 hidden">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-slate-700">Zarządzaj składem grupy</h2>
+                    <button onclick="closeMembersModal()" class="text-xs text-slate-400 hover:text-slate-600">Zamknij</button>
+                </div>
+                <div class="flex space-x-2">
+                    <input type="text" id="new-member-name" class="flex-grow px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Imię nowej osoby">
+                    <button onclick="addMember()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-4 py-2 rounded-xl transition">Dodaj</button>
+                </div>
+                <div class="space-y-2 pt-2 border-t">
+                    <p class="text-xs text-slate-500">Obecni uczestnicy (usunięcie przy saldzie 0.00 zł):</p>
+                    <div id="members-list-edit" class="space-y-2"></div>
+                </div>
+            </section>
+
+            <!-- FORMULARZ DODAWANIA OPERACJI -->
+            <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+                
+                <!-- Przełącznik z dodanym onclick -->
+                <div class="flex bg-slate-100 p-1 rounded-xl">
+                    <button id="mode-expense-tab" type="button" onclick="switchFormMode('expense')" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white shadow-sm transition">Dodaj wydatek</button>
+                    <button id="mode-transfer-tab" type="button" onclick="switchFormMode('transfer')" class="flex-1 py-1.5 text-xs font-semibold rounded-lg text-slate-500 transition">Przekaż pieniądze</button>
+                </div>
+
+                <div class="flex justify-between items-center">
+                    <h2 id="form-title" class="text-lg font-semibold text-slate-700">Dodaj wydatek</h2>
+                    <button id="cancel-edit-btn" onclick="cancelEdit()" class="text-xs text-rose-500 hover:underline hidden">Anuluj edycję</button>
+                </div>
+                
+                <input type="hidden" id="editing-item-type" value="expense">
+                <input type="hidden" id="editing-item-id" value="">
+
+                <!-- FORMULARZ TRANSFERU -->
+                <div id="transfer-form-container" class="space-y-3 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Kto przekazuje pieniądze (dłużnik):</label>
+                        <select id="trans-from" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Komu przekazuje (wierzyciel):</label>
+                        <select id="trans-to" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Kwota przelewu (zł):</label>
+                        <input type="number" id="trans-amount" step="0.01" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="0.00">
+                    </div>
+                </div>
+
+                <!-- FORMULARZ WYDATKU -->
+                <div id="expense-form-container" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Tytuł wydatku:</label>
+                        <input type="text" id="exp-title" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="np. Zakupy w sklepie">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Łączna kwota wydatku (zł):</label>
+                        <input type="number" id="exp-amount" step="0.01" oninput="onTotalAmountChange()" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="0.00">
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-slate-600">Kto zapłacił:</label>
+                        <select id="exp-payer-type" onchange="togglePayerInputs()" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="single">Jedna osoba</option>
+                            <option value="custom">Wiele osób (kwoty indywidualne)</option>
+                        </select>
+                    </div>
+
+                    <div id="single-payer-container">
+                        <select id="exp-payer-single" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"></select>
+                    </div>
+
+                    <div id="custom-payer-container" class="space-y-2 hidden bg-slate-50 p-3 rounded-xl border">
+                        <p class="text-xs text-slate-500">Wpisz, ile kto faktycznie wyłożył:</p>
+                        <div id="custom-payers-list" class="space-y-2"></div>
+                        <div class="text-xs font-medium pt-1 flex justify-between" id="payer-sum-indicator">
+                            <span>Suma wpłat: 0.00 zł</span>
+                            <span id="payer-match-status" class="text-slate-400"></span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 pt-2 border-t">
+                        <label class="block text-sm font-medium text-slate-600">Sposób podziału kosztu:</label>
+                        <select id="exp-split-type" onchange="toggleSplitInputs()" class="w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="equal">Wszyscy po równo</option>
+                            <option value="custom">Kwoty indywidualne</option>
+                        </select>
+                    </div>
+
+                    <div id="custom-split-container" class="space-y-2 hidden bg-slate-50 p-3 rounded-xl border">
+                        <p class="text-xs text-slate-500">Wpisz kwoty podziału:</p>
+                        <div id="custom-inputs-list" class="space-y-2"></div>
+                        <div class="text-xs font-medium pt-1 flex justify-between" id="split-sum-indicator">
+                            <span>Suma podziału: 0.00 zł</span>
+                            <span id="split-match-status" class="text-slate-400"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="submit-item-btn" onclick="saveItem()" class="w-full bg-emerald-600 text-white font-medium py-2.5 rounded-xl hover:bg-emerald-700 transition">Zapisz wydatek</button>
+            </section>
+
+            <!-- PODSUMOWANIE DŁUGÓW -->
+            <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-slate-700">Podsumowanie długów</h2>
+                    <button onclick="copySummary()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition font-medium">📋 Kopiuj raport</button>
+                </div>
+                <div id="balances-list" class="space-y-2 text-sm"></div>
+            </section>
+
+            <!-- HISTORIA OPERACJI -->
+            <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+                <h2 class="text-lg font-semibold text-slate-700">Historia operacji</h2>
+                <div id="history-list" class="space-y-2 divide-y divide-slate-100"></div>
+            </section>
+
+        </div>
+    </main>
+
+    <script>
+        let appData = JSON.parse(localStorage.getItem('kotokomu_multi_data')) || {
+            sheets: [],
+            activeSheetId: null
+        };
+
+        window.onload = function() {
+            renderSheetsList();
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js').catch(err => console.log('SW error:', err));
+            }
+        };
+
+        function saveState() {
+            localStorage.setItem('kotokomu_multi_data', JSON.stringify(appData));
+        }
+
+        function goHome() {
+            appData.activeSheetId = null;
+            saveState();
+            cancelEdit();
+            closeMembersModal();
+            document.getElementById('sheets-list-section').classList.remove('hidden');
+            document.getElementById('create-sheet-section').classList.add('hidden');
+            document.getElementById('main-panel').classList.add('hidden');
+            renderSheetsList();
+        }
+
+        function showCreateSheetModal() {
+            document.getElementById('sheets-list-section').classList.add('hidden');
+            document.getElementById('create-sheet-section').classList.remove('hidden');
+            document.getElementById('sheet-name').value = '';
+            document.getElementById('sheet-members').value = '';
+        }
+
+        function renderSheetsList() {
+            const container = document.getElementById('sheets-container');
+            if (appData.sheets.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white p-6 rounded-2xl border border-slate-100 text-center space-y-3">
+                        <p class="text-sm text-slate-500">Brak zapisanych arkuszy. Stwórz pierwszy!</p>
+                        <button onclick="showCreateSheetModal()" class="bg-indigo-600 text-white text-xs font-medium px-4 py-2 rounded-xl">Stwórz arkusz</button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = appData.sheets.map(sheet => {
+                let totalSpent = (sheet.expenses || []).reduce((sum, e) => sum + e.amount, 0);
+                return `
+                    <div onclick="openSheet(${sheet.id})" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-300 transition cursor-pointer flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-base">${sheet.name}</h3>
+                            <p class="text-xs text-slate-500">Uczestnicy: ${sheet.members.join(', ')}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs font-semibold bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full">${totalSpent.toFixed(2)} zł</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function createSheet() {
+            const name = document.getElementById('sheet-name').value.trim();
+            const membersRaw = document.getElementById('sheet-members').value.trim();
+            
+            if (!name || !membersRaw) {
+                alert('Podaj nazwę arkusza oraz uczestników!');
+                return;
+            }
+
+            const members = membersRaw.split(',').map(m => m.trim()).filter(m => m.length > 0);
+            if (members.length < 2) {
+                alert('Wprowadź przynajmniej 2 uczestników.');
+                return;
+            }
+
+            const newSheet = {
+                id: Date.now(),
+                name,
+                members,
+                expenses: [],
+                transfers: []
+            };
+
+            appData.sheets.push(newSheet);
+            appData.activeSheetId = newSheet.id;
+            saveState();
+
+            document.getElementById('create-sheet-section').classList.add('hidden');
+            document.getElementById('main-panel').classList.remove('hidden');
+            renderActiveSheet();
+        }
+
+        function openSheet(id) {
+            appData.activeSheetId = id;
+            saveState();
+            cancelEdit();
+            closeMembersModal();
+            document.getElementById('sheets-list-section').classList.add('hidden');
+            document.getElementById('create-sheet-section').classList.add('hidden');
+            document.getElementById('main-panel').classList.remove('hidden');
+            renderActiveSheet();
+        }
+
+        function deleteCurrentSheet() {
+            if (confirm('Czy na pewno chcesz usunąć ten arkusz?')) {
+                appData.sheets = appData.sheets.filter(s => s.id !== appData.activeSheetId);
+                goHome();
+            }
+        }
+
+        function getActiveSheet() {
+            return appData.sheets.find(s => s.id === appData.activeSheetId);
+        }
+
+        function resetApp() {
+            if (confirm('Zresetować całą aplikację i usunąć wszystkie arkusze?')) {
+                localStorage.removeItem('kotokomu_multi_data');
+                location.reload();
+            }
+        }
+
+        function openMembersModal() {
+            document.getElementById('members-modal-section').classList.remove('hidden');
+            document.getElementById('new-member-name').value = '';
+            renderMembersEditList();
+        }
+
+        function closeMembersModal() {
+            document.getElementById('members-modal-section').classList.add('hidden');
+        }
+
+        function renderMembersEditList() {
+            const sheet = getActiveSheet();
+            const container = document.getElementById('members-list-edit');
+            const balances = calculateBalancesMap(sheet);
+
+            container.innerHTML = sheet.members.map(m => {
+                const bal = balances[m] || 0;
+                const isZero = Math.abs(bal) < 0.01;
+                return `
+                    <div class="flex justify-between items-center text-sm py-1.5 border-b border-slate-50">
+                        <span class="font-medium text-slate-700">${m}</span>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs ${isZero ? 'text-emerald-600' : 'text-slate-400'}">saldo: ${bal.toFixed(2)} zł</span>
+                            <button onclick="removeMember('${m}')" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 px-2 py-1 rounded transition font-medium">Usuń</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addMember() {
+            const sheet = getActiveSheet();
+            const nameInput = document.getElementById('new-member-name');
+            const name = nameInput.value.trim();
+
+            if (!name) {
+                alert('Podaj imię nowej osoby.');
+                return;
+            }
+
+            if (sheet.members.includes(name)) {
+                alert('Taka osoba już jest na liście.');
+                return;
+            }
+
+            sheet.members.push(name);
+            saveState();
+            nameInput.value = '';
+            renderMembersEditList();
+            renderActiveSheet();
+        }
+
+        function removeMember(name) {
+            const sheet = getActiveSheet();
+
+            if (sheet.members.length <= 2) {
+                alert('Arkusz musi mieć przynajmniej 2 uczestników.');
+                return;
+            }
+
+            const balances = calculateBalancesMap(sheet);
+            const bal = balances[name] || 0;
+
+            if (Math.abs(bal) >= 0.01) {
+                alert(`Nie można usunąć osoby „${name}”, ponieważ jej saldo nie wynosi 0 zł (obecnie ${bal.toFixed(2)} zł).`);
+                return;
+            }
+
+            if (confirm(`Czy na pewno chcesz usunąć osobę „${name}”?`)) {
+                sheet.members = sheet.members.filter(m => m !== name);
+                saveState();
+                renderMembersEditList();
+                renderActiveSheet();
+            }
+        }
+
+        function switchFormMode(mode) {
+            const editingId = document.getElementById('editing-item-id').value;
+            if (!editingId) {
+                clearForm();
+            }
+
+            const expTab = document.getElementById('mode-expense-tab');
+            const transTab = document.getElementById('mode-transfer-tab');
+            const expContainer = document.getElementById('expense-form-container');
+            const transContainer = document.getElementById('transfer-form-container');
+            const btn = document.getElementById('submit-item-btn');
+            const title = document.getElementById('form-title');
+
+            document.getElementById('editing-item-type').value = mode;
+
+            if (mode === 'expense') {
+                expTab.className = "flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white shadow-sm transition";
+                transTab.className = "flex-1 py-1.5 text-xs font-semibold rounded-lg text-slate-500 transition";
+                expContainer.classList.remove('hidden');
+                transContainer.classList.add('hidden');
+                if (!editingId) {
+                    title.innerText = 'Dodaj wydatek';
+                    btn.innerText = 'Zapisz wydatek';
+                    btn.className = 'w-full bg-emerald-600 text-white font-medium py-2.5 rounded-xl hover:bg-emerald-700 transition';
+                }
+            } else {
+                transTab.className = "flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white shadow-sm transition";
+                expTab.className = "flex-1 py-1.5 text-xs font-semibold rounded-lg text-slate-500 transition";
+                transContainer.classList.remove('hidden');
+                expContainer.classList.add('hidden');
+                if (!editingId) {
+                    title.innerText = 'Przekazanie pieniędzy';
+                    btn.innerText = 'Zapisz przelew';
+                    btn.className = 'w-full bg-indigo-600 text-white font-medium py-2.5 rounded-xl hover:bg-indigo-700 transition';
+                }
+            }
+        }
+
+        function calculateBalancesMap(sheet) {
+            let balances = {};
+            sheet.members.forEach(m => balances[m] = 0);
+
+            if (sheet.expenses) {
+                sheet.expenses.forEach(e => {
+                    if (e.paidBy) {
+                        for (let [payer, amount] of Object.entries(e.paidBy)) {
+                            if (balances[payer] !== undefined) balances[payer] += amount;
+                        }
+                    } else if (e.payer) {
+                        if (balances[e.payer] !== undefined) balances[e.payer] += e.amount;
+                    }
+
+                    if (e.shares) {
+                        for (let [member, share] of Object.entries(e.shares)) {
+                            if (balances[member] !== undefined) balances[member] -= share;
+                        }
+                    }
+                });
+            }
+
+            if (sheet.transfers) {
+                sheet.transfers.forEach(t => {
+                    if (balances[t.from] !== undefined) balances[t.from] += t.amount;
+                    if (balances[t.to] !== undefined) balances[t.to] -= t.amount;
+                });
+            }
+
+            return balances;
+        }
+
+        function renderActiveSheet() {
+            const sheet = getActiveSheet();
+            if (!sheet) {
+                goHome();
+                return;
+            }
+
+            if (!sheet.transfers) sheet.transfers = [];
+
+            document.getElementById('display-sheet-name').innerText = sheet.name;
+            document.getElementById('display-members').innerText = "Uczestnicy: " + sheet.members.join(', ');
+
+            const transFrom = document.getElementById('trans-from');
+            const transTo = document.getElementById('trans-to');
+            transFrom.innerHTML = sheet.members.map(m => `<option value="${m}">${m}</option>`).join('');
+            transTo.innerHTML = sheet.members.map(m => `<option value="${m}">${m}</option>`).join('');
+            if (sheet.members.length > 1) transTo.selectedIndex = 1;
+
+            const payerSingle = document.getElementById('exp-payer-single');
+            payerSingle.innerHTML = sheet.members.map(m => `<option value="${m}">${m}</option>`).join('');
+
+            const customPayersContainer = document.getElementById('custom-payers-list');
+            customPayersContainer.innerHTML = sheet.members.map(m => `
+                <div class="flex items-center justify-between text-sm">
+                    <span class="w-1/3 truncate font-medium text-slate-600">${m}</span>
+                    <input type="number" step="0.01" data-payer="${m}" oninput="updatePayerPreview()" class="custom-payer-input w-2/3 px-3 py-1 border rounded-lg text-right" placeholder="0.00 zł">
+                </div>
+            `).join('');
+
+            const customContainer = document.getElementById('custom-inputs-list');
+            customContainer.innerHTML = sheet.members.map(m => `
+                <div class="flex items-center justify-between text-sm">
+                    <span class="w-1/3 truncate font-medium text-slate-600">${m}</span>
+                    <input type="number" step="0.01" data-member="${m}" oninput="updateSplitPreview()" class="custom-share-input w-2/3 px-3 py-1 border rounded-lg text-right" placeholder="0.00 zł">
+                </div>
+            `).join('');
+
+            renderHistory();
+            calculateBalances();
+        }
+
+        function togglePayerInputs() {
+            const type = document.getElementById('exp-payer-type').value;
+            const singleContainer = document.getElementById('single-payer-container');
+            const customContainer = document.getElementById('custom-payer-container');
+            if (type === 'custom') {
+                singleContainer.classList.add('hidden');
+                customContainer.classList.remove('hidden');
+                updatePayerPreview();
+            } else {
+                singleContainer.classList.remove('hidden');
+                customContainer.classList.add('hidden');
+            }
+        }
+
+        function toggleSplitInputs() {
+            const type = document.getElementById('exp-split-type').value;
+            const container = document.getElementById('custom-split-container');
+            if (type === 'custom') {
+                container.classList.remove('hidden');
+                updateSplitPreview();
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function onTotalAmountChange() {
+            updatePayerPreview();
+            updateSplitPreview();
+        }
+
+        function updatePayerPreview() {
+            const totalAmount = parseFloat(document.getElementById('exp-amount').value) || 0;
+            const type = document.getElementById('exp-payer-type').value;
+            
+            if (type === 'custom') {
+                const inputs = document.querySelectorAll('.custom-payer-input');
+                let sum = 0;
+                inputs.forEach(input => { sum += parseFloat(input.value) || 0; });
+
+                const indicator = document.getElementById('payer-sum-indicator');
+                const status = document.getElementById('payer-match-status');
+                indicator.firstElementChild.innerText = `Suma wpłat: ${sum.toFixed(2)} zł (z rachunku: ${totalAmount.toFixed(2)} zł)`;
+                
+                if (Math.abs(sum - totalAmount) < 0.01) {
+                    status.innerText = '✓ Zgadza się';
+                    status.className = 'text-emerald-600 font-medium';
+                } else {
+                    status.innerText = '⚠ Różni się od kwoty';
+                    status.className = 'text-amber-500 font-medium';
+                }
+            }
+        }
+
+        function updateSplitPreview() {
+            const totalAmount = parseFloat(document.getElementById('exp-amount').value) || 0;
+            const type = document.getElementById('exp-split-type').value;
+            
+            if (type === 'custom') {
+                const inputs = document.querySelectorAll('.custom-share-input');
+                let sum = 0;
+                inputs.forEach(input => { sum += parseFloat(input.value) || 0; });
+
+                const indicator = document.getElementById('split-sum-indicator');
+                const status = document.getElementById('split-match-status');
+                indicator.firstElementChild.innerText = `Suma podziału: ${sum.toFixed(2)} zł (z rachunku: ${totalAmount.toFixed(2)} zł)`;
+                
+                if (Math.abs(sum - totalAmount) < 0.01) {
+                    status.innerText = '✓ Zgadza się';
+                    status.className = 'text-emerald-600 font-medium';
+                } else {
+                    status.innerText = '⚠ Różni się od kwoty';
+                    status.className = 'text-amber-500 font-medium';
+                }
+            }
+        }
+
+        function saveItem() {
+            const sheet = getActiveSheet();
+            const mode = document.getElementById('editing-item-type').value;
+            const editingId = document.getElementById('editing-item-id').value;
+
+            if (mode === 'expense') {
+                const title = document.getElementById('exp-title').value.trim();
+                const amount = parseFloat(document.getElementById('exp-amount').value);
+                const payerType = document.getElementById('exp-payer-type').value;
+                const splitType = document.getElementById('exp-split-type').value;
+
+                if (!title || isNaN(amount) || amount <= 0) {
+                    alert('Podaj poprawny tytuł oraz kwotę.');
+                    return;
+                }
+
+                let paidBy = {};
+                if (payerType === 'single') {
+                    const singlePayer = document.getElementById('exp-payer-single').value;
+                    paidBy[singlePayer] = amount;
+                } else {
+                    const inputs = document.querySelectorAll('.custom-payer-input');
+                    inputs.forEach(input => {
+                        const m = input.getAttribute('data-payer');
+                        const val = parseFloat(input.value) || 0;
+                        if (val > 0) paidBy[m] = val;
+                    });
+                }
+
+                let shares = {};
+                if (splitType === 'equal') {
+                    const sharePerPerson = amount / sheet.members.length;
+                    sheet.members.forEach(m => { shares[m] = sharePerPerson; });
+                } else {
+                    const inputs = document.querySelectorAll('.custom-share-input');
+                    inputs.forEach(input => {
+                        const m = input.getAttribute('data-member');
+                        const val = parseFloat(input.value) || 0;
+                        shares[m] = val;
+                    });
+                }
+
+                if (editingId) {
+                    const index = sheet.expenses.findIndex(e => e.id == editingId);
+                    if (index !== -1) {
+                        sheet.expenses[index] = { id: parseInt(editingId), type: 'expense', title, amount, paidBy, shares };
+                    }
+                    cancelEdit();
+                } else {
+                    sheet.expenses.push({ id: Date.now(), type: 'expense', title, amount, paidBy, shares });
+                }
+
+            } else {
+                const from = document.getElementById('trans-from').value;
+                const to = document.getElementById('trans-to').value;
+                const amount = parseFloat(document.getElementById('trans-amount').value);
+
+                if (from === to) {
+                    alert('Osoba przekazująca i otrzymująca muszą być różne!');
+                    return;
+                }
+
+                if (isNaN(amount) || amount <= 0) {
+                    alert('Podaj poprawną kwotę przelewu.');
+                    return;
+                }
+
+                if (editingId) {
+                    const index = sheet.transfers.findIndex(t => t.id == editingId);
+                    if (index !== -1) {
+                        sheet.transfers[index] = { id: parseInt(editingId), type: 'transfer', from, to, amount };
+                    }
+                    cancelEdit();
+                } else {
+                    sheet.transfers.push({ id: Date.now(), type: 'transfer', from, to, amount });
+                }
+            }
+
+            saveState();
+            clearForm();
+            renderActiveSheet();
+        }
+
+        function editItem(id, type) {
+            const sheet = getActiveSheet();
+            if (type === 'expense') {
+                const expense = sheet.expenses.find(e => e.id === id);
+                if (!expense) return;
+
+                switchFormMode('expense');
+                document.getElementById('editing-item-id').value = expense.id;
+                document.getElementById('exp-title').value = expense.title;
+                document.getElementById('exp-amount').value = expense.amount;
+
+                const payerKeys = Object.keys(expense.paidBy || {});
+                if (payerKeys.length === 1 && expense.paidBy[payerKeys[0]] === expense.amount) {
+                    document.getElementById('exp-payer-type').value = 'single';
+                    togglePayerInputs();
+                    document.getElementById('exp-payer-single').value = payerKeys[0];
+                } else {
+                    document.getElementById('exp-payer-type').value = 'custom';
+                    togglePayerInputs();
+                    const payerInputs = document.querySelectorAll('.custom-payer-input');
+                    payerInputs.forEach(input => {
+                        const m = input.getAttribute('data-payer');
+                        input.value = expense.paidBy[m] ? expense.paidBy[m] : '';
+                    });
+                    updatePayerPreview();
+                }
+
+                const shareKeys = Object.keys(expense.shares || {});
+                const firstVal = expense.shares[shareKeys[0]];
+                const isAllEqual = shareKeys.every(m => Math.abs(expense.shares[m] - firstVal) < 0.01);
+
+                if (isAllEqual) {
+                    document.getElementById('exp-split-type').value = 'equal';
+                    toggleSplitInputs();
+                } else {
+                    document.getElementById('exp-split-type').value = 'custom';
+                    toggleSplitInputs();
+                    const shareInputs = document.querySelectorAll('.custom-share-input');
+                    shareInputs.forEach(input => {
+                        const m = input.getAttribute('data-member');
+                        input.value = expense.shares[m] ? expense.shares[m] : '';
+                    });
+                    updateSplitPreview();
+                }
+
+                document.getElementById('form-title').innerText = 'Edytuj wydatek';
+                document.getElementById('submit-item-btn').innerText = 'Zaktualizuj wydatek';
+                document.getElementById('submit-item-btn').className = 'w-full bg-amber-600 text-white font-medium py-2.5 rounded-xl hover:bg-amber-700 transition';
+            } else {
+                const transfer = (sheet.transfers || []).find(t => t.id === id);
+                if (!transfer) return;
+
+                switchFormMode('transfer');
+                document.getElementById('editing-item-id').value = transfer.id;
+                document.getElementById('trans-from').value = transfer.from;
+                document.getElementById('trans-to').value = transfer.to;
+                document.getElementById('trans-amount').value = transfer.amount;
+
+                document.getElementById('form-title').innerText = 'Edytuj przelew';
+                document.getElementById('submit-item-btn').innerText = 'Zaktualizuj przelew';
+                document.getElementById('submit-item-btn').className = 'w-full bg-amber-600 text-white font-medium py-2.5 rounded-xl hover:bg-amber-700 transition';
+            }
+
+            document.getElementById('cancel-edit-btn').classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function cancelEdit() {
+            document.getElementById('editing-item-id').value = '';
+            clearForm();
+            switchFormMode('expense');
+            document.getElementById('cancel-edit-btn').classList.add('hidden');
+        }
+
+        function clearForm() {
+            document.getElementById('exp-title').value = '';
+            document.getElementById('exp-amount').value = '';
+            document.getElementById('exp-payer-type').value = 'single';
+            togglePayerInputs();
+            document.getElementById('exp-split-type').value = 'equal';
+            toggleSplitInputs();
+            document.getElementById('trans-amount').value = '';
+
+            document.querySelectorAll('.custom-payer-input').forEach(i => i.value = '');
+            document.querySelectorAll('.custom-share-input').forEach(i => i.value = '');
+        }
+
+        function deleteItem(id, type) {
+            const sheet = getActiveSheet();
+            if (confirm('Na pewno usunąć tę operację?')) {
+                const editingId = document.getElementById('editing-item-id').value;
+                if (editingId == id) {
+                    cancelEdit();
+                }
+                if (type === 'expense') {
+                    sheet.expenses = sheet.expenses.filter(e => e.id !== id);
+                } else {
+                    sheet.transfers = sheet.transfers.filter(t => t.id !== id);
+                }
+                saveState();
+                renderActiveSheet();
+            }
+        }
+
+        function renderHistory() {
+            const sheet = getActiveSheet();
+            const list = document.getElementById('history-list');
+            
+            let combined = [];
+            if (sheet.expenses) {
+                sheet.expenses.forEach(e => combined.push({ ...e, itemType: 'expense' }));
+            }
+            if (sheet.transfers) {
+                sheet.transfers.forEach(t => combined.push({ ...t, itemType: 'transfer' }));
+            }
+
+            combined.sort((a, b) => b.id - a.id);
+
+            if (combined.length === 0) {
+                list.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Brak operacji w historii.</p>`;
+                return;
+            }
+
+            list.innerHTML = combined.map(item => {
+                if (item.itemType === 'expense') {
+                    let payerText = '';
+                    if (item.paidBy) {
+                        payerText = Object.entries(item.paidBy)
+                            .map(([person, val]) => `${person} (${val.toFixed(2)} zł)`)
+                            .join(', ');
+                    } else {
+                        payerText = `${item.payer} (${item.amount.toFixed(2)} zł)`;
+                    }
+
+                    return `
+                        <div class="flex justify-between items-center text-sm py-2">
+                            <div>
+                                <div class="font-medium text-slate-800">${item.title}</div>
+                                <div class="text-xs text-slate-500">Zapłacili: <span class="font-semibold text-indigo-600">${payerText}</span> • Łącznie: ${item.amount.toFixed(2)} zł</div>
+                            </div>
+                            <div class="flex space-x-1">
+                                <button onclick="editItem(${item.id}, 'expense')" class="text-xs text-indigo-600 hover:text-indigo-800 px-2 py-1 font-medium">Edytuj</button>
+                                <button onclick="deleteItem(${item.id}, 'expense')" class="text-xs text-red-500 hover:text-red-700 px-2 py-1">Usuń</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="flex justify-between items-center text-sm py-2 bg-indigo-50/40 px-2 rounded-xl">
+                            <div>
+                                <div class="font-medium text-indigo-900">💸 Przekazanie środków</div>
+                                <div class="text-xs text-slate-600"><span class="font-semibold">${item.from}</span> → <span class="font-semibold">${item.to}</span> • <span class="text-indigo-700 font-bold">${item.amount.toFixed(2)} zł</span></div>
+                            </div>
+                            <div class="flex space-x-1">
+                                <button onclick="editItem(${item.id}, 'transfer')" class="text-xs text-indigo-600 hover:text-indigo-800 px-2 py-1 font-medium">Edytuj</button>
+                                <button onclick="deleteItem(${item.id}, 'transfer')" class="text-xs text-red-500 hover:text-red-700 px-2 py-1">Usuń</button>
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        function calculateBalances() {
+            const sheet = getActiveSheet();
+            const balances = calculateBalancesMap(sheet);
+
+            const list = document.getElementById('balances-list');
+            let html = '';
+            
+            sheet.members.forEach(m => {
+                const bal = balances[m] || 0;
+                let color = 'text-slate-600';
+                let text = 'rozliczony/a';
+                if (bal > 0.01) {
+                    color = 'text-emerald-600 font-semibold';
+                    text = `jest na plusie (+${bal.toFixed(2)} zł)`;
+                } else if (bal < -0.01) {
+                    color = 'text-rose-600 font-semibold';
+                    text = `musi oddać (${bal.toFixed(2)} zł)`;
+                }
+                html += `<div class="flex justify-between py-1 border-b border-slate-50"><span>${m}</span><span class="${color}">${text}</span></div>`;
+            });
+
+            list.innerHTML = html;
+        }
+
+        function copySummary() {
+            const sheet = getActiveSheet();
+            let text = `📊 Podsumowanie rozliczeń: *${sheet.name}*\n\n`;
+            const balances = calculateBalancesMap(sheet);
+
+            sheet.members.forEach(m => {
+                const bal = balances[m] || 0;
+                if (bal > 0.01) {
+                    text += `• *${m}* jest na plusie: +${bal.toFixed(2)} zł\n`;
+                } else if (bal < -0.01) {
+                    text += `• *${m}* musi oddać: ${bal.toFixed(2)} zł\n`;
+                } else {
+                    text += `• *${m}* jest na czysto (0 zł)\n`;
+                }
+            });
+
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Skopiowano podsumowanie do schowka!');
+            });
+        }
+    </script>
+</body>
+</html>
